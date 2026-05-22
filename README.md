@@ -64,3 +64,6 @@ File `.idsig` harus ada **di folder yang sama** dengan APK waktu install.
 
 ## 📄 License
 MIT License — bebas dipakai, dimodif, dan didistribusiin asal tetap kasih kredit.
+
+# Preview
+![prev1](.assets/foto1.png)
