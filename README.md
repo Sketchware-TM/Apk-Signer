@@ -29,7 +29,7 @@ Script Bash interaktif untuk signing APK Android. Support semua versi signature 
 ### v2.2 (Beta)
 - **Fix** Menu [1] Buat Keystore — sigalg sekarang disesuaikan per key algorithm (RSA → `withRSA`, EC → `withECDSA`, DSA → `withDSA`), sebelumnya selalu `withRSA` dan error kalau pilih EC/DSA
 - **Fix** EC keystore — flag `-keysize -curve` yang salah diganti jadi `-groupname <curve>` sesuai syntax keytool yang bener
-- **Improve** Menu [1] di-refactor jadi function `create_keystore_menu()` tersendiri, lebih modular dan clean
+- **Improve** Menu [1] di-refactor jadi function `create_keystore_menu()` tersendiri
 - **Improve** EC sekarang punya menu pilihan curve sendiri (secp256r1 / secp384r1 / secp521r1 / prime256v1)
 - **Improve** DSA sekarang punya menu pilihan sigalg sendiri (SHA256withDSA / SHA224withDSA)
 - **Improve** Summary keystore di akhir tampilin `Type | Algo | Sig` buat konfirmasi
