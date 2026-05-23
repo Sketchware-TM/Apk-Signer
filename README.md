@@ -1,10 +1,10 @@
-# Apk Signer V2.1
+# Apk Signer V2.2 (Beta)
 <p align="center">
   <img src="https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white" alt="Bash"/>
   <img src="https://img.shields.io/badge/Termux-Android-000000?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Termux"/>
   <img src="https://img.shields.io/badge/Linux-Compatible-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux"/>
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"/>
-  <img src="https://img.shields.io/badge/version-2.1-4ade80?style=for-the-badge" alt="Version 2.1"/>
+  <img src="https://img.shields.io/badge/version-2.2--beta-f59e0b?style=for-the-badge" alt="Version 2.2 Beta"/>
 </p>
 
 Script Bash interaktif untuk signing APK Android. Support semua versi signature (V1–V4), buat keystore baru, key rotation (V3.1), dan verifikasi APK. Jalan di **Termux** (Android) maupun **Linux**.
@@ -25,6 +25,14 @@ Script Bash interaktif untuk signing APK Android. Support semua versi signature 
 ---
 
 ## 🔧 Changelog
+
+### v2.2 (Beta)
+- **Fix** Menu [1] Buat Keystore — sigalg sekarang disesuaikan per key algorithm (RSA → `withRSA`, EC → `withECDSA`, DSA → `withDSA`), sebelumnya selalu `withRSA` dan error kalau pilih EC/DSA
+- **Fix** EC keystore — flag `-keysize -curve` yang salah diganti jadi `-groupname <curve>` sesuai syntax keytool yang bener
+- **Improve** Menu [1] di-refactor jadi function `create_keystore_menu()` tersendiri, lebih modular dan clean
+- **Improve** EC sekarang punya menu pilihan curve sendiri (secp256r1 / secp384r1 / secp521r1 / prime256v1)
+- **Improve** DSA sekarang punya menu pilihan sigalg sendiri (SHA256withDSA / SHA224withDSA)
+- **Improve** Summary keystore di akhir tampilin `Type | Algo | Sig` buat konfirmasi
 
 ### v2.1
 - **Fix** Menu [2] Sign APK — tambah flag `--v4-signing-enabled` eksplisit supaya V4 gak ikut ke-generate kalau gak dipilih
@@ -78,6 +86,3 @@ File `.idsig` harus ada **di folder yang sama** dengan APK waktu install.
 
 ## 📄 License
 MIT License — bebas dipakai, dimodif, dan didistribusiin asal tetap kasih kredit.
-
-# Preview
-![prev1](.assets/foto1.png)
