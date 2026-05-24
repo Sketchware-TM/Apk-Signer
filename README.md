@@ -1,10 +1,10 @@
-# Apk Signer V2.2 (Beta)
+# Apk Signer V2.3 (Beta)
 <p align="center">
   <img src="https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white" alt="Bash"/>
   <img src="https://img.shields.io/badge/Termux-Android-000000?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Termux"/>
   <img src="https://img.shields.io/badge/Linux-Compatible-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux"/>
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"/>
-  <img src="https://img.shields.io/badge/version-2.2--beta-f59e0b?style=for-the-badge" alt="Version 2.2 Beta"/>
+  <img src="https://img.shields.io/badge/version-2.3--beta-f59e0b?style=for-the-badge" alt="Version 2.2 Beta"/>
 </p>
 
 Script Bash interaktif untuk signing APK Android. Support semua versi signature (V1–V4), buat keystore baru, key rotation (V3.1), dan verifikasi APK. Jalan di **Termux** (Android) maupun **Linux**.
@@ -25,6 +25,13 @@ Script Bash interaktif untuk signing APK Android. Support semua versi signature 
 ---
 
 ## 🔧 Changelog
+
+### v2.3 (Beta)
+- **Fix** Verifikasi APK — tidak error `Missing META-INF/MANIFEST.MF` saat V1 disabled, auto-deteksi V1 via isi APK
+- **Fix** `mktemp` pakai default temp directory sistem — fix permission denied di Termux
+- **Security** Password signing tidak bocor di `ps aux`, ditangani via environment variable (`env:APKSIGNER_KS_PASS`)
+- **Improve** Install `apksigner` via `pkg install` / `apt install` (hapus wget URL)
+- **Improve** Auto-verify setelah sign di semua mode
 
 ### v2.2 (Beta)
 - **Fix** Menu [1] Buat Keystore — sigalg sekarang disesuaikan per key algorithm (RSA → `withRSA`, EC → `withECDSA`, DSA → `withDSA`), sebelumnya selalu `withRSA` dan error kalau pilih EC/DSA
