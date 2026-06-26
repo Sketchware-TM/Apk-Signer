@@ -1,10 +1,10 @@
-# Apk Signer V2.3 (Beta)
+# Apk Signer V2.4 (Beta)
 <p align="center">
   <img src="https://img.shields.io/badge/Shell-Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white" alt="Bash"/>
   <img src="https://img.shields.io/badge/Termux-Android-000000?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Termux"/>
   <img src="https://img.shields.io/badge/Linux-Compatible-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux"/>
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License"/>
-  <img src="https://img.shields.io/badge/version-2.3--beta-f59e0b?style=for-the-badge" alt="Version 2.2 Beta"/>
+  <img src="https://img.shields.io/badge/version-2.4--beta-f59e0b?style=for-the-badge" alt="Version 2.4 Beta"/>
 </p>
 
 Script Bash interaktif untuk signing APK Android. Support semua versi signature (V1–V4), buat keystore baru, key rotation (V3.1), dan verifikasi APK. Jalan di **Termux** (Android) maupun **Linux**.
@@ -21,10 +21,20 @@ Script Bash interaktif untuk signing APK Android. Support semua versi signature 
 | [4] Verifikasi APK | Auto-deteksi V4 (.idsig) |
 | [5] Sign V4 | Butuh V2 atau V3 aktif |
 | [6] V3.1 + V4 | Kombinasi rotasi + V4 sekaligus |
+| ⏳ Loading Spinner | Indikator proses berjalan di semua operasi sign/rotate/keystore, plus warning highlight otomatis |
+| 🧹 Auto Strip Signature | Deteksi & hapus META-INF lama otomatis sebelum signing (dengan konfirmasi) |
+| 🔒 DN Escape | Support spasi, koma, dan tanda kurung di Distinguished Name (fix error `Incorrect AVA format`) |
 
 ---
 
 ## 🔧 Changelog
+
+### v2.4 (Beta)
+- **New** Auto-strip signature lama — sebelum signing, script deteksi META-INF di APK, kasih pilihan hapus atau skip (mencegah konflik V2 verify di MT Manager dkk)
+- **New** Escape karakter khusus di DN — support spasi, koma `,`, tanda kurung `( )`, dan backslash `\` di CN/OU/O/L/ST (fix `java.io.IOException: Incorrect AVA format`)
+- **Fix** Spinner & output handling — command output di-redirect ke temp file, hanya tampil kalau ada error/warning; warning ditampilkan dengan warna merah otomatis
+- **Fix** Hapus `eval` di `run_with_spinner` — panggil command langsung pake `"$@"` biar argumen dengan spasi & karakter khusus gak pecah
+- **Security** Semua panggilan `apksigner` dan `keytool` pakai `env` untuk password — gak bocor di `ps aux`
 
 ### v2.3 (Beta)
 - **Fix** Verifikasi APK — tidak error `Missing META-INF/MANIFEST.MF` saat V1 disabled, auto-deteksi V1 via isi APK
@@ -69,14 +79,14 @@ chmod +x sign.sh
 ./sign.sh
 ```
 
-### 📱 Termux (Android)
+📱 Termux (Android)
 
 ```bash
 pkg install openjdk-17
 ./sign.sh
 ```
 
-### 💻 Linux (Debian/Ubuntu)
+💻 Linux (Debian/Ubuntu)
 
 ```bash
 sudo apt install default-jdk apksigner -y
@@ -85,11 +95,23 @@ sudo apt install default-jdk apksigner -y
 
 ---
 
-## ⚠️ Catatan V4
+📱 Update & Kontak
 
-File `.idsig` harus ada **di folder yang sama** dengan APK waktu install.
+Kalau ada kendala, mau lapor bug, langsung aja hubungi di bawah ini:
+
+- **Telegram Personal:** [@SkTeamProject29](https://t.me/SkTeamProject29)  
+
+Atau klik langsung link ini buat chat:  
+👉 [https://t.me/SkTeamProject29](https://t.me/SkTeamProject29)
 
 ---
 
-## 📄 License
+⚠️ Catatan V4
+
+File .idsig harus ada di folder yang sama dengan APK waktu install.
+
+---
+
+📄 License
+
 MIT License — bebas dipakai, dimodif, dan didistribusiin asal tetap kasih kredit.

@@ -1,5 +1,58 @@
 #!/usr/bin/env bash
 
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+else
+    RED=''; GREEN=''; YELLOW=''; BLUE=''; NC=''
+fi
+
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    while ps -p $pid > /dev/null 2>&1; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "     \b\b\b\b\b"
+}
+
+run_with_spinner() {
+    local msg="$1"
+    shift
+    local tmpfile=$(mktemp)
+    echo -ne "${YELLOW}$msg${NC} "
+    "$@" > "$tmpfile" 2>&1 &
+    local pid=$!
+    spinner $pid
+    wait $pid
+    local exit_code=$?
+    if [ -s "$tmpfile" ]; then
+        echo ""
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Warning: ]]; then
+                echo -e "${RED}$line${NC}"
+            else
+                echo "$line"
+            fi
+        done < "$tmpfile"
+    fi
+    rm -f "$tmpfile"
+    if [ $exit_code -eq 0 ]; then
+        echo -e "${GREEN}✅ Selesai${NC}"
+    else
+        echo -e "${RED}❌ Gagal (exit $exit_code)${NC}"
+    fi
+    return $exit_code
+}
+
 detect_environment() {
     if [[ -d "/data/data/com.termux" ]]; then
         ENV="TERMUX"
@@ -11,17 +64,6 @@ detect_environment() {
         echo -e "${BLUE}💻 Environment: LINUX detected${NC}"
     fi
 }
-
-# Warna (works di kedua environment)
-if [[ -t 1 ]]; then
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[0;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m'
-else
-    RED=''; GREEN=''; YELLOW=''; BLUE=''; NC=''
-fi
 
 apksigner_sign_secure() {
     local ks_env_val="$1"
@@ -42,13 +84,10 @@ apksigner_rotate_secure() {
         "$@"
 }
 
-# Deteksi OS dan install dependencies otomatis
 setup_dependencies() {
     detect_environment
-    
     echo -e "${YELLOW}🔧 Checking dependencies...${NC}"
     
-    # Cek Java (required untuk keytool)
     if ! command -v java &> /dev/null; then
         echo -e "${YELLOW}⚠️  Java not found! Installing...${NC}"
         if [[ "$ENV" == "TERMUX" ]]; then
@@ -59,7 +98,6 @@ setup_dependencies() {
         fi
     fi
     
-    # Cek apksigner
     if ! command -v apksigner &> /dev/null; then
         echo -e "${YELLOW}⚠️  apksigner not found! Installing...${NC}"
         if [[ "$ENV" == "TERMUX" ]]; then
@@ -75,7 +113,6 @@ setup_dependencies() {
         fi
     fi
     
-    # Cek keytool
     if ! command -v keytool &> /dev/null; then
         echo -e "${RED}❌ keytool not found! Java installation may be incomplete.${NC}"
         exit 1
@@ -152,6 +189,35 @@ ask_sign_versions() {
     return 0
 }
 
+strip_signature() {
+    local apk_file="$1"
+    local tmp_apk="${apk_file%.apk}_tmp.apk"
+    
+    if unzip -l "$apk_file" 2>/dev/null | grep -q "META-INF/"; then
+        echo -e "${YELLOW}⚠️  APK ini sudah disign (ada META-INF)${NC}"
+        read -p "Hapus signature lama sebelum sign? [y/N]: " confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}🗑️  Menghapus META-INF dari APK...${NC}"
+            cp "$apk_file" "$tmp_apk"
+            if zip -d "$tmp_apk" "META-INF/*" >/dev/null 2>&1; then
+                mv "$tmp_apk" "$apk_file"
+                echo -e "${GREEN}✅ Signature lama berhasil dihapus${NC}"
+                return 0
+            else
+                echo -e "${RED}❌ Gagal menghapus META-INF!${NC}"
+                rm -f "$tmp_apk"
+                return 1
+            fi
+        else
+            echo -e "${YELLOW}⏩ Lewati penghapusan (risiko konflik signature)${NC}"
+            return 0
+        fi
+    else
+        echo -e "${GREEN}✅ APK masih polos (belum ada signature)${NC}"
+        return 0
+    fi
+}
+
 verify_apk() {
     local apk_file="$1"
     local v1_used="${2:-true}"
@@ -165,7 +231,8 @@ verify_apk() {
     if [ -f "$idsig_file" ]; then
         echo -e "${YELLOW}🔍 File .idsig ditemukan! Verifikasi dengan V4 signature...${NC}"
         echo ""
-        $APKSIGNER_CMD verify $sdk_flag -v -v4-signature-file "$idsig_file" "$apk_file" 2>&1
+        run_with_spinner "🔍 Verifikasi APK (V4)..." \
+            $APKSIGNER_CMD verify $sdk_flag -v -v4-signature-file "$idsig_file" "$apk_file"
         local result=$?
         echo ""
         if [ $result -eq 0 ]; then
@@ -176,7 +243,8 @@ verify_apk() {
     else
         echo -e "${YELLOW}🔍 File .idsig tidak ditemukan, verifikasi standar...${NC}"
         echo ""
-        $APKSIGNER_CMD verify $sdk_flag --verbose --print-certs "$apk_file" 2>&1
+        run_with_spinner "🔍 Verifikasi APK..." \
+            $APKSIGNER_CMD verify $sdk_flag --verbose --print-certs "$apk_file"
         local result=$?
         echo ""
         if [ $result -eq 0 ]; then
@@ -199,14 +267,12 @@ sign_v31_v4_combination() {
     echo "   - Hasil: APK dengan lineage rotasi + .idsig file"
     echo ""
     
-    # Input Keystore LAMA
     echo -e "${YELLOW}🔑 KEYSTORE LAMA (Existing/Primary)${NC}"
     read -p "Keystore LAMA (.jks/.p12/.bks): " old_ks
     [ ! -f "$old_ks" ] && { echo -e "${RED}❌ Gak ketemu!${NC}"; return 1; }
     read -p "Alias LAMA: " old_alias
     read -sp "Password LAMA: " old_pwd; echo
     
-    # Input Keystore BARU
     echo ""
     echo -e "${YELLOW}🔑 KEYSTORE BARU (For Rotation)${NC}"
     read -p "Keystore BARU (.jks/.p12/.bks): " new_ks
@@ -214,15 +280,17 @@ sign_v31_v4_combination() {
     read -p "Alias BARU: " new_alias
     read -sp "Password BARU: " new_pwd; echo
     
-    # Input APK
     echo ""
     read -p "File APK: " apk_file
     [ ! -f "$apk_file" ] && { echo -e "${RED}❌ APK gak ketemu!${NC}"; return 1; }
     
-    # Output name
+    if ! strip_signature "$apk_file"; then
+        echo -e "${RED}❌ Gagal strip signature, proses dibatalkan.${NC}"
+        return 1
+    fi
+    
     ask_output_name "$apk_file" "v31_v4"
     
-    # Pilih kombinasi V1/V2/V3 untuk V3.1
     echo ""
     echo -e "${YELLOW}🔏 Pilih signature version untuk V3.1 (minimal V2 atau V3):${NC}"
     echo "  [1] V2 + V3        ✅ Recommended untuk rotasi"
@@ -237,33 +305,26 @@ sign_v31_v4_combination() {
         4) v31_v1=false; v31_v2=false; v31_v3=true;;
         *) v31_v1=false; v31_v2=true; v31_v3=true;;
     esac
-    
     echo -e "${BLUE}   → V1:$v31_v1 V2:$v31_v2 V3:$v31_v3${NC}"
     
-    # ========= STEP 1: Buat Lineage Rotasi =========
     echo ""
-    echo -e "${YELLOW}⏳ Step 1/2: Membuat lineage rotasi...${NC}"
-    
     lineage_tmp=$(mktemp)
-    APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
+    run_with_spinner "⏳ Step 1/2: Membuat lineage rotasi..." \
+        env APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
         $APKSIGNER_CMD rotate \
         --out "$lineage_tmp" \
         --old-signer --ks "$old_ks" --ks-pass env:APKSIGNER_OLD_PASS \
-        --new-signer --ks "$new_ks" --ks-pass env:APKSIGNER_NEW_PASS 2>&1
-    
+        --new-signer --ks "$new_ks" --ks-pass env:APKSIGNER_NEW_PASS
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Gagal buat lineage!${NC}"
         rm -f "$lineage_tmp"
         return 1
     fi
-    echo -e "${GREEN}✅ Lineage rotasi berhasil dibuat${NC}"
     
-    # ========= STEP 2: Sign dengan V3.1 + V4 =========
     echo -e "${YELLOW}⏳ Step 2/2: Signing APK dengan V3.1 + V4...${NC}"
-    
     cp "$apk_file" "$out_apk"
-    
-    APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
+    run_with_spinner "🔏 Signing V3.1 + V4..." \
+        env APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
         $APKSIGNER_CMD sign \
         --ks "$old_ks" \
         --ks-key-alias "$old_alias" --ks-pass env:APKSIGNER_OLD_PASS \
@@ -276,7 +337,7 @@ sign_v31_v4_combination() {
         --v2-signing-enabled $v31_v2 \
         --v3-signing-enabled $v31_v3 \
         --v4-signing-enabled true \
-        "$out_apk" 2>&1
+        "$out_apk"
     
     sign_exit=$?
     rm -f "$lineage_tmp"
@@ -307,7 +368,13 @@ sign_v31_v4_combination() {
     fi
 }
 
-# ============= MENU 1 YANG UDAH DIUPDATE =============
+escape_dn_value() {
+    local val="$1"
+    val="${val//\\/\\\\}"
+    val="${val//,/\\,}"
+    echo "$val"
+}
+
 create_keystore_menu() {
     echo ""
     read -p "Nama keystore (tanpa ekstensi): " ks_input
@@ -456,21 +523,21 @@ create_keystore_menu() {
         return 1
     fi
 
-    dname="CN=$cn, OU=$ou, O=$o, L=$l, ST=$st, C=$c"
+    dname="CN=$(escape_dn_value "$cn"), OU=$(escape_dn_value "$ou"), O=$(escape_dn_value "$o"), L=$(escape_dn_value "$l"), ST=$(escape_dn_value "$st"), C=$(escape_dn_value "$c")"
     echo -e "${BLUE}📄 dname: $dname${NC}"
 
-    echo -e "${YELLOW}⏳ Membuat keystore $ks_name...${NC}"
-    keytool -genkey -v \
-        -keystore "$ks_name" \
-        -storetype "$key_type" \
-        $keyalg \
-        -sigalg "$sigalg" \
-        -validity 36500 \
-        -alias "$ks_alias" \
-        -storepass "$ks_pwd" \
-        -keypass "$ks_pwd" \
-        -dname "$dname" \
-        -noprompt 2>/dev/null
+    run_with_spinner "⏳ Membuat keystore $ks_name..." \
+        keytool -genkey -v \
+            -keystore "$ks_name" \
+            -storetype "$key_type" \
+            $keyalg \
+            -sigalg "$sigalg" \
+            -validity 36500 \
+            -alias "$ks_alias" \
+            -storepass "$ks_pwd" \
+            -keypass "$ks_pwd" \
+            -dname "$dname" \
+            -noprompt
 
     if [ -f "$ks_name" ]; then
         echo -e "${GREEN}✅ Keystore berhasil: $ks_name${NC}"
@@ -482,7 +549,6 @@ create_keystore_menu() {
     fi
 }
 
-# MAIN
 setup_dependencies
 APKSIGNER_CMD=$(get_apksigner_path)
 
@@ -509,6 +575,12 @@ while true; do
             echo ""
             read -p "File APK: " apk_file
             [ ! -f "$apk_file" ] && { echo -e "${RED}❌ APK gak ketemu!${NC}"; continue; }
+            
+            if ! strip_signature "$apk_file"; then
+                echo -e "${RED}❌ Gagal strip signature, proses dibatalkan.${NC}"
+                continue
+            fi
+            
             read -p "Keystore (.jks/.p12/.bks): " ks_file
             [ ! -f "$ks_file" ] && { echo -e "${RED}❌ Keystore gak ketemu!${NC}"; continue; }
 
@@ -526,17 +598,18 @@ while true; do
             ask_output_name "$apk_file" "signed"
 
             cp "$apk_file" "$out_apk"
-            APKSIGNER_KS_PASS="$sign_pwd" \
-            $APKSIGNER_CMD sign \
-                --ks "$ks_file" \
-                --ks-key-alias "$sign_alias" \
-                --ks-pass env:APKSIGNER_KS_PASS \
-                --key-pass env:APKSIGNER_KS_PASS \
-                --v1-signing-enabled $v1_enabled \
-                --v2-signing-enabled $v2_enabled \
-                --v3-signing-enabled $v3_enabled \
-                --v4-signing-enabled $v4_enabled \
-                "$out_apk" 2>&1
+            run_with_spinner "🔏 Signing APK..." \
+                env APKSIGNER_KS_PASS="$sign_pwd" \
+                $APKSIGNER_CMD sign \
+                    --ks "$ks_file" \
+                    --ks-key-alias "$sign_alias" \
+                    --ks-pass env:APKSIGNER_KS_PASS \
+                    --key-pass env:APKSIGNER_KS_PASS \
+                    --v1-signing-enabled $v1_enabled \
+                    --v2-signing-enabled $v2_enabled \
+                    --v3-signing-enabled $v3_enabled \
+                    --v4-signing-enabled $v4_enabled \
+                    "$out_apk"
 
             if [ $? -eq 0 ]; then
                 echo -e "${GREEN}✅ Signed: $out_apk${NC}"
@@ -566,42 +639,44 @@ while true; do
             echo ""
             read -p "File APK: " apk_file
             [ ! -f "$apk_file" ] && { echo -e "${RED}❌ APK gak ketemu!${NC}"; continue; }
+            
+            if ! strip_signature "$apk_file"; then
+                echo -e "${RED}❌ Gagal strip signature, proses dibatalkan.${NC}"
+                continue
+            fi
+            
             ask_sign_versions || continue
             ask_output_name "$apk_file" "v31"
 
-            echo -e "${YELLOW}⏳ Buat lineage rotasi...${NC}"
             lineage_tmp=$(mktemp)
-            APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
+            run_with_spinner "⏳ Buat lineage rotasi..." \
+                env APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
                 $APKSIGNER_CMD rotate \
                 --out "$lineage_tmp" \
                 --old-signer --ks "$old_ks" --ks-pass env:APKSIGNER_OLD_PASS \
-                --new-signer --ks "$new_ks" --ks-pass env:APKSIGNER_NEW_PASS 2>&1
-
+                --new-signer --ks "$new_ks" --ks-pass env:APKSIGNER_NEW_PASS
             if [ $? -ne 0 ]; then
                 echo -e "${RED}❌ Gagal buat lineage!${NC}"
                 rm -f "$lineage_tmp"
                 continue
             fi
-            echo -e "${GREEN}✅ Lineage dibuat.${NC}"
-
-            echo -e "${YELLOW}⏳ Signing APK V3.1...${NC}"
 
             cp "$apk_file" "$out_apk"
-            APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
+            run_with_spinner "🔏 Signing V3.1..." \
+                env APKSIGNER_OLD_PASS="$old_pwd" APKSIGNER_NEW_PASS="$new_pwd" \
                 $APKSIGNER_CMD sign \
-                --ks "$old_ks" \
-                --ks-key-alias "$old_alias" --ks-pass env:APKSIGNER_OLD_PASS \
-                --next-signer \
-                --ks "$new_ks" \
-                --ks-key-alias "$new_alias" --ks-pass env:APKSIGNER_NEW_PASS \
-                --lineage "$lineage_tmp" \
-                --rotation-min-sdk-version 33 \
-                --v1-signing-enabled $v1_enabled \
-                --v2-signing-enabled $v2_enabled \
-                --v3-signing-enabled $v3_enabled \
-                --v4-signing-enabled $v4_enabled \
-                "$out_apk" 2>&1
-
+                    --ks "$old_ks" \
+                    --ks-key-alias "$old_alias" --ks-pass env:APKSIGNER_OLD_PASS \
+                    --next-signer \
+                    --ks "$new_ks" \
+                    --ks-key-alias "$new_alias" --ks-pass env:APKSIGNER_NEW_PASS \
+                    --lineage "$lineage_tmp" \
+                    --rotation-min-sdk-version 33 \
+                    --v1-signing-enabled $v1_enabled \
+                    --v2-signing-enabled $v2_enabled \
+                    --v3-signing-enabled $v3_enabled \
+                    --v4-signing-enabled $v4_enabled \
+                    "$out_apk"
             sign_exit=$?
             rm -f "$lineage_tmp"
 
@@ -635,6 +710,11 @@ while true; do
 
             read -p "File APK: " apk_file
             [ ! -f "$apk_file" ] && { echo -e "${RED}❌ APK gak ketemu!${NC}"; continue; }
+            
+            if ! strip_signature "$apk_file"; then
+                echo -e "${RED}❌ Gagal strip signature, proses dibatalkan.${NC}"
+                continue
+            fi
 
             read -p "Keystore (.jks/.p12/.bks): " ks_file
             [ ! -f "$ks_file" ] && { echo -e "${RED}❌ Keystore gak ketemu!${NC}"; continue; }
@@ -668,17 +748,18 @@ while true; do
             ask_output_name "$apk_file" "signed_v4"
 
             cp "$apk_file" "$out_apk"
-            APKSIGNER_KS_PASS="$sign_pwd" \
-            $APKSIGNER_CMD sign \
-                --ks "$ks_file" \
-                --ks-key-alias "$sign_alias" \
-                --ks-pass env:APKSIGNER_KS_PASS \
-                --key-pass env:APKSIGNER_KS_PASS \
-                --v1-signing-enabled $v1e \
-                --v2-signing-enabled $v2e \
-                --v3-signing-enabled $v3e \
-                --v4-signing-enabled true \
-                "$out_apk" 2>&1
+            run_with_spinner "🔏 Signing V4..." \
+                env APKSIGNER_KS_PASS="$sign_pwd" \
+                $APKSIGNER_CMD sign \
+                    --ks "$ks_file" \
+                    --ks-key-alias "$sign_alias" \
+                    --ks-pass env:APKSIGNER_KS_PASS \
+                    --key-pass env:APKSIGNER_KS_PASS \
+                    --v1-signing-enabled $v1e \
+                    --v2-signing-enabled $v2e \
+                    --v3-signing-enabled $v3e \
+                    --v4-signing-enabled true \
+                    "$out_apk"
 
             if [ $? -eq 0 ]; then
                 idsig_file="${out_apk}.idsig"
