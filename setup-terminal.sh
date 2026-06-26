@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# ============================================================
-# Setup ApkSigner - Link sign.sh ke sistem PATH
-# Support: Termux, Linux, macOS, Windows (Git Bash/WSL)
-# ============================================================
 
 if [[ -t 1 ]]; then
     RED=$'\033[0;31m'
@@ -15,9 +11,6 @@ else
     RED=''; GREEN=''; YELLOW=''; BLUE=''; CYAN=''; NC=''
 fi
 
-# ============================================================
-# DETEKSI OS & ENVIRONMENT
-# ============================================================
 detect_os() {
     if [[ -d "/data/data/com.termux" ]]; then
         OS="TERMUX"
@@ -60,9 +53,6 @@ detect_os() {
     fi
 }
 
-# ============================================================
-# CARI LOKASI sign.sh
-# ============================================================
 find_sign_script() {
     local script_path=""
     if [[ -f "./sign.sh" ]]; then
@@ -83,13 +73,8 @@ find_sign_script() {
     echo "$script_path"
 }
 
-# ============================================================
-# CREATE BIN DIRECTORY & UPDATE PATH (hanya untuk non-Termux)
-# ============================================================
 create_bin_dir() {
     if [[ "$OS" == "TERMUX" ]]; then
-        # Termux sudah punya PATH ke /data/data/com.termux/files/usr/bin
-        # Tidak perlu tambahkan ke profile
         return 0
     fi
 
@@ -120,9 +105,6 @@ create_bin_dir() {
     fi
 }
 
-# ============================================================
-# INSTALL / COPY SCRIPT
-# ============================================================
 install_script() {
     local source_path="$1"
     local target_name="$2"
@@ -154,9 +136,6 @@ install_script() {
     fi
 }
 
-# ============================================================
-# SHOW USAGE
-# ============================================================
 show_usage() {
     cat << EOF
 ${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
@@ -190,11 +169,7 @@ ${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━�
 EOF
 }
 
-# ============================================================
-# MAIN
-# ============================================================
 main() {
-    # Deteksi OS dulu biar PROFILE_FILE kebaca di help
     detect_os
 
     local custom_source=""
