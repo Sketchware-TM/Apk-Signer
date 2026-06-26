@@ -555,7 +555,7 @@ APKSIGNER_CMD=$(get_apksigner_path)
 while true; do
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  APK SIGNER v2.3 (Beta) - [$ENV MODE]"
+    echo "  APK SIGNER v2.4 (Beta) - [$ENV MODE]"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  [1] Buat keystore (custom algorithm + key size)"
     echo "  [2] Sign APK (V1/V2/V3 - pilih kombinasi)"

@@ -98,11 +98,7 @@ sudo apt install default-jdk apksigner -y
 📱 Update & Kontak
 
 Kalau ada kendala, mau lapor bug, langsung aja hubungi di bawah ini:
-
 - **Telegram Personal:** [@SkTeamProject29](https://t.me/SkTeamProject29)  
-
-Atau klik langsung link ini buat chat:  
-👉 [https://t.me/SkTeamProject29](https://t.me/SkTeamProject29)
 
 ---
 
